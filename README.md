@@ -103,4 +103,10 @@ set -x  # ... code ...  set +x   # localized trace inside script
 
 ---
 
+## Local trusted TLS (lab / internal)
+
+To stop browser and Java “self-signed” / PKIX errors by using a **private CA** and a **CA-signed server cert** (with SANs), see [docs/local-trusted-ca.md](docs/local-trusted-ca.md) and run **`scripts/setup-local-ca.sh`**.
+
+---
+
 Add scripts under a clear layout (for example `bin/` for executables, `lib/` for sourced helpers) and document any non-obvious dependencies or required tools in this file or next to the script.
