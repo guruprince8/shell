@@ -105,7 +105,7 @@ set -x  # ... code ...  set +x   # localized trace inside script
 
 ## Local trusted TLS (lab / internal)
 
-To stop browser and Java “self-signed” / PKIX errors by using a **private CA** and a **CA-signed server cert** (with SANs), see [docs/local-trusted-ca.md](docs/local-trusted-ca.md) and run **`scripts/setup-local-ca.sh`**.
+To stop browser and Java “self-signed” / PKIX errors by using a **private CA** and a **CA-signed server cert** (with SANs), see [docs/local-trusted-ca.md](docs/local-trusted-ca.md) and run **`scripts/setup-local-ca.sh`**. That doc also covers **Elasticsearch on Ubuntu**: copy `server.crt` / `server.key` into `/etc/elasticsearch/certs/`, set `xpack.security.http.ssl.*` to those paths, and **`sudo systemctl restart elasticsearch`**.
 
 ---
 

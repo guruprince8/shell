@@ -125,15 +125,51 @@ curl -v "https://oauth2.sapphire.com:9200"
 
 Adjust port and path. You should **not** need `-k` once the CA is trusted.
 
-## Elasticsearch example
+## Elasticsearch on Ubuntu (copy certs + HTTP SSL + restart)
+
+After `setup-local-ca.sh` has produced `server.crt` and `server.key` (by default under **`~/myCA`**, or whatever you passed as `-c` / `CA_DIR`), install them where the Elasticsearch service can read them and point `xpack` at those paths.
+
+### 1. Copy certificate and key into Elasticsearch’s cert directory
+
+Adjust **`MY_CA`** if your files live elsewhere:
+
+```bash
+MY_CA="${HOME}/myCA"
+sudo install -d -m 0755 /etc/elasticsearch/certs
+sudo cp -- "$MY_CA/server.crt" "$MY_CA/server.key" /etc/elasticsearch/certs/
+sudo chown root:elasticsearch /etc/elasticsearch/certs/server.crt /etc/elasticsearch/certs/server.key
+sudo chmod 0640 /etc/elasticsearch/certs/server.crt /etc/elasticsearch/certs/server.key
+```
+
+If your package runs as a different user/group than `elasticsearch`, match ownership to whatever owns the Elasticsearch process (see `systemctl show -p User -p Group elasticsearch`).
+
+### 2. Enable HTTP TLS in `elasticsearch.yml`
+
+Edit **`/etc/elasticsearch/elasticsearch.yml`** (merge with your existing settings; do not duplicate keys):
 
 ```yaml
 xpack.security.http.ssl.enabled: true
-xpack.security.http.ssl.certificate: /path/to/myCA/server.crt
-xpack.security.http.ssl.key: /path/to/myCA/server.key
+xpack.security.http.ssl.key: /etc/elasticsearch/certs/server.key
+xpack.security.http.ssl.certificate: /etc/elasticsearch/certs/server.crt
 ```
 
-Use the **same** hostname in the URL as in the cert SAN. For transport layer between nodes, use a separate transport cert or the same pattern with transport SANs—follow Elastic’s docs for your version.
+Use the **same** hostname (or IP) in client URLs as in the cert SAN. Transport TLS between nodes is separate—see Elastic’s docs for your major version if you also secure transport.
+
+### 3. Restart Elasticsearch
+
+```bash
+sudo systemctl restart elasticsearch
+sudo systemctl status elasticsearch --no-pager
+```
+
+### 4. Quick check
+
+```bash
+curl -v "https://$(hostname -f):9200"
+# or the host name from your cert, e.g. https://elastic.sapphire.com:9200
+```
+
+You should **not** need `-k` once the OS (and/or Java `cacerts`) trusts your local Root CA as described above.
 
 ## Troubleshooting
 
