@@ -6,7 +6,6 @@
 # your locally trusted CA, not anonymous self-signed).
 set -euo pipefail
 
-DOMAIN="${DOMAIN:-oauth2.sapphire.com}"
 CA_DIR="${CA_DIR:-${HOME}/myCA}"
 CA_DAYS="${CA_DAYS:-3650}"
 SERVER_DAYS="${SERVER_DAYS:-825}"
@@ -20,6 +19,7 @@ INSTALL_JAVA=0
 INSTALL_HOSTS=0
 FORCE_CA=0
 NEW_SERVER_KEY=0
+DOMAINS=()
 IPS=()
 
 usage() {
@@ -31,7 +31,7 @@ Usage: setup-local-ca.sh [options]
   server cert), which avoids untrusted-chain errors once the CA is installed.
 
 Options:
-  -d, --domain FQDN     Primary DNS name / cert CN (default: oauth2.sapphire.com)
+  -d, --domain FQDN     DNS name in SAN (repeatable). First -d is also the cert CN. Default if none: oauth2.sapphire.com or \$DOMAIN.
   -i, --ip ADDR         Extra SAN IP (repeatable). 127.0.0.1 and localhost added by default.
   -c, --ca-dir PATH     Output directory (default: ~/myCA)
   --ca-cn NAME          Root CA Common Name (default: MyLocalRootCA)
@@ -49,6 +49,7 @@ Environment:
 
 Examples:
   ./setup-local-ca.sh -d oauth2.sapphire.com -i 192.168.1.228
+  ./setup-local-ca.sh -d oauth2.sapphire.com -d elastic.sapphire.com -i 192.168.1.228 --install-all
   ./setup-local-ca.sh -d api.local.test -i 10.0.0.5 --install-all
 EOF
 }
@@ -79,6 +80,7 @@ detect_java_cacerts() {
 
 write_server_cnf() {
   local cnf="$1"
+  local cn_primary="${DOMAINS[0]}"
   {
     echo '[req]'
     echo 'default_bits = 2048'
@@ -88,7 +90,7 @@ write_server_cnf() {
     echo 'req_extensions = req_ext'
     echo ''
     echo '[dn]'
-    echo "CN = ${DOMAIN}"
+    echo "CN = ${cn_primary}"
     echo ''
     echo '[req_ext]'
     echo 'subjectAltName = @alt_names'
@@ -97,8 +99,14 @@ write_server_cnf() {
     echo ''
     echo '[alt_names]'
     local d=1
-    echo "DNS.${d} = ${DOMAIN}"
-    d=$((d + 1))
+    local dom
+    declare -A seen_dns=()
+    for dom in "${DOMAINS[@]}"; do
+      [[ -n "${seen_dns[$dom]:-}" ]] && continue
+      seen_dns[$dom]=1
+      echo "DNS.${d} = ${dom}"
+      d=$((d + 1))
+    done
     echo "DNS.${d} = localhost"
     local p=1
     echo "IP.${p} = 127.0.0.1"
@@ -113,7 +121,7 @@ write_server_cnf() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -d|--domain)
-      DOMAIN="$2"
+      DOMAINS+=("$2")
       shift 2
       ;;
     -i|--ip)
@@ -165,6 +173,10 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ ${#DOMAINS[@]} -eq 0 ]]; then
+  DOMAINS=("${DOMAIN:-oauth2.sapphire.com}")
+fi
 
 require_cmd openssl
 mkdir -p -- "$CA_DIR"
@@ -256,13 +268,15 @@ if [[ "$INSTALL_HOSTS" -eq 1 ]]; then
   if [[ ${#IPS[@]} -gt 0 ]]; then
     hosts_ip="${IPS[0]}"
   fi
-  line="${hosts_ip}	${DOMAIN}"
-  if grep -qF -- "$DOMAIN" /etc/hosts 2>/dev/null; then
-    log "/etc/hosts already mentions $DOMAIN — skipping (edit manually if IP is wrong)"
-  else
-    log "appending hosts line: $line"
-    printf '%s\n' "$line" | sudo tee -a /etc/hosts >/dev/null
-  fi
+  for dom in "${DOMAINS[@]}"; do
+    line="${hosts_ip}	${dom}"
+    if grep -qF -- "$dom" /etc/hosts 2>/dev/null; then
+      log "/etc/hosts already mentions $dom — skipping (edit manually if IP is wrong)"
+    else
+      log "appending hosts line: $line"
+      printf '%s\n' "$line" | sudo tee -a /etc/hosts >/dev/null
+    fi
+  done
 fi
 
 cat <<EOF
@@ -272,6 +286,6 @@ Next steps (if you did not use --install-*):
   2. Java: sudo keytool -importcert -alias $KEYSTORE_ALIAS -file $ROOT_CRT -keystore \$(dirname \$(readlink -f \$(which java)))/../lib/security/cacerts -storepass changeit -noprompt
      (or set JAVA_HOME and use \$JAVA_HOME/lib/security/cacerts)
   3. Point your server (Elasticsearch, etc.) at: $SRV_CRT and $SRV_KEY
-  4. curl test: curl -v "https://${DOMAIN}:9200"   (adjust port/path)
+  4. curl test, e.g.: curl -v "https://${DOMAINS[0]}:9200"   (try each -d name; adjust port/path)
 
 EOF

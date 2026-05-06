@@ -24,7 +24,7 @@ Automates:
 | Server | `server.key`, `server.cnf` (SAN), CSR, `server.crt` signed by the CA |
 | Optional `--install-system` | `sudo cp` CA cert into `/usr/local/share/ca-certificates/`, `sudo update-ca-certificates` |
 | Optional `--install-java` | Detects `java.home` (or `JAVA_HOME`), imports CA into that JDK’s `cacerts` via `keytool` |
-| Optional `--install-hosts` | Appends `IP<TAB>domain` to `/etc/hosts` (first `--ip`, or `127.0.0.1`) |
+| Optional `--install-hosts` | Appends `IP<TAB>domain` to `/etc/hosts` for each `-d` (first `--ip`, or `127.0.0.1`) |
 
 Defaults match a typical internal hostname example; override with flags or env vars.
 
@@ -41,11 +41,12 @@ chmod +x scripts/setup-local-ca.sh
 # Create material under ~/myCA (default), for oauth2.sapphire.com + LAN IP
 ./scripts/setup-local-ca.sh \
   -d oauth2.sapphire.com \
+  -d elastic.sapphire.com \
   -i 192.168.1.228 \
   --install-all
 ```
 
-- **`-d` / `--domain`:** Primary DNS name (CN + SAN). Must match what clients put in the URL.
+- **`-d` / `--domain`:** Repeat for every hostname that must validate (each becomes a DNS SAN). The **first** `-d` is also the certificate **CN**. Must match what clients put in the URL.
 - **`-i` / `--ip`:** Extra SAN IP (repeat `-i` for more). The script always adds `localhost` and `127.0.0.1` to SANs.
 - **`--install-all`:** System CA store + Java `cacerts` + `/etc/hosts` line.
 
@@ -63,7 +64,7 @@ Run **without** `--install-*` if you only want files under `CA_DIR` and will ins
 
 ### Environment variables
 
-You can set defaults instead of flags: `DOMAIN`, `CA_DIR`, `CA_DAYS`, `SERVER_DAYS`, `CA_CN`, `KEYSTORE_ALIAS`, `KEYSTORE_PASS`, `CA_CERT_INSTALL_NAME`, `JAVA_HOME`.
+You can set defaults instead of flags: `DOMAIN` (single hostname when you pass no `-d`), `CA_DIR`, `CA_DAYS`, `SERVER_DAYS`, `CA_CN`, `KEYSTORE_ALIAS`, `KEYSTORE_PASS`, `CA_CERT_INSTALL_NAME`, `JAVA_HOME`.
 
 The default `keytool` store password is the usual OpenJDK default **`changeit`**; override with `KEYSTORE_PASS` if your JDK uses something else.
 
